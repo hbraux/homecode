@@ -4,10 +4,22 @@ A simple local AI coding agent in Python. Sends prompts to a local `llama-server
 
 ## Requirements
 
-- Python 3.x with `requests` and `rich` (`pip install requests rich`)
+- Python 3.x with `requests` and `rich` (usually already in the OS python env, otherwise run `pip install requests rich`)
 - A GPU with Vulkan support (Linux) or Apple Silicon (macOS)
 
-## Install
+## Add to PATH
+
+To run `homecode` from anywhere:
+
+```bash
+chmod +x homecode.py
+ln -s "$(pwd)/homecode.py" ~/.local/bin/homecode
+```
+
+Make sure `~/.local/bin` is in your `PATH`
+
+
+## Install llama-server
 
 ```bash
 python3 homecode.py --install   # download latest llama.cpp to ~/.llama
@@ -25,11 +37,11 @@ Press `ctrl+d` to exit. Input history is saved to `~/.homecode_history`.
 
 ## Configuration
 
-| Environment variable | Default | Description |
-|---|---|---|
-| `HOMECODE_MODEL_ID` | `bartowski/google_gemma-4-E4B-it-GGUF:Q5_K_M` | HuggingFace model repo |
-| `HOMECODE_MODEL_PARAMS` | see source | Extra flags passed to `llama-server` |
-| `TAVILY_API_KEY` | *(unset)* | Enable web search via Tavily |
+| Environment variable    | Default                                       | Description                          |
+|-------------------------|-----------------------------------------------|--------------------------------------|
+| `HOMECODE_MODEL_ID`     | `bartowski/google_gemma-4-E4B-it-GGUF:Q5_K_M` | HuggingFace model repo               |
+| `HOMECODE_MODEL_PARAMS` | see source                                    | Extra flags passed to `llama-server` |
+| `TAVILY_API_KEY`        | *(unset)*                                     | Enable web search via Tavily         |
 
 ## How it works
 
