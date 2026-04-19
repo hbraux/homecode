@@ -22,15 +22,15 @@ Make sure `~/.local/bin` is in your `PATH`
 ## Install llama-server
 
 ```bash
-python3 homecode.py --install   # download latest llama.cpp to ~/.llama
+homecode --install   # download latest llama.cpp to ~/.llama
 ```
 
 ## Usage
 
 ```bash
-python3 homecode.py             # start the REPL (auto-starts llama-server)
-python3 homecode.py --timings   # show token/s after each response
-python3 homecode.py --keep-server  # leave llama-server running on exit
+homecode             # start the REPL (auto-starts llama-server)
+homecode --timings   # show token/s after each response
+homecode --keep-server  # leave llama-server running on exit
 ```
 
 Press `ctrl+d` to exit. Input history is saved to `~/.homecode_history`.
