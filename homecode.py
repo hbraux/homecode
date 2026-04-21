@@ -198,7 +198,7 @@ def main():
     readline.parse_and_bind("set editing-mode emacs")
     try:
         readline.read_history_file(HISTORY_FILE)
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         pass
     server_proc = ensure_server()
     tools = fetch_tools()
