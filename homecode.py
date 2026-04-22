@@ -218,7 +218,7 @@ def chat(messages, tools, show_timings=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="homecode v{VERSION} — local AI coding agent")
+    parser = argparse.ArgumentParser(description=f"homecode v{VERSION} — local AI coding agent")
     parser.add_argument("--install", action="store_true", help="install or update llama.cpp to ~/.llama")
     parser.add_argument("--update", action="store_true", help="update homecode.py from GitHub")
     parser.add_argument("--timings", action="store_true", help="show token rate after each response")
