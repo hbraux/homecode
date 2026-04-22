@@ -21,6 +21,7 @@ from rich.markdown import Markdown
 
 console = Console()
 
+VERSION = "0.2"
 BASE_URL = "http://localhost:8080"
 MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "bartowski/google_gemma-4-E4B-it-GGUF:Q5_K_M")
 MODEL_PARAMS = os.environ.get("HOMECODE_MODEL_PARAMS", "--no-mmproj --ctx-size 16384 --flash-attn on --temp 0.1 --n-gpu-layers all")
@@ -40,7 +41,14 @@ BOLD        = "\033[1m"
 BOLD_YELLOW = "\033[1;33m"
 BOLD_BLUE   = "\033[1;34m"
 RESET       = "\033[0m"
-SYSTEM_PROMPT = "You are an expert coding assistant. You help with any programming language, framework, or tool. You can read, write, and edit files, search code, and run shell commands to assist with software engineering tasks."
+AGENT_FILE = "AGENT.md"
+SYSTEM_PROMPT = (
+    "You are an expert coding assistant. "
+    "You help with any programming language, framework, or tool. "
+    "You can read, write, and edit files, search code, and run shell commands to assist with software engineering tasks. "
+    "When asked to create a file or write code, always write it to disk using the file writing tool — never dump code in your response. "
+    "Be concise."
+)
 
 
 def install_llama():
@@ -81,6 +89,29 @@ def install_llama():
     with open(version_file, "w") as f:
         f.write(latest)
     print(f"Installed {latest}")
+
+
+def update_script():
+    url = "https://raw.githubusercontent.com/hbraux/homecode/main/homecode.py"
+    print("Checking for updates ...")
+    resp = requests.get(url)
+    resp.raise_for_status()
+    new_source = resp.text
+    match = re.search(r'^VERSION\s*=\s*"([^"]+)"', new_source, re.MULTILINE)
+    if not match:
+        print("Could not determine remote version.", file=sys.stderr)
+        sys.exit(1)
+    remote_version = match.group(1)
+    if remote_version == VERSION:
+        print(f"Already up to date (v{VERSION})")
+        return
+    script_path = os.path.realpath(__file__)
+    tmp = script_path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(new_source)
+    os.chmod(tmp, os.stat(script_path).st_mode)
+    os.replace(tmp, script_path)
+    print(f"Updated v{VERSION} → v{remote_version}")
 
 
 def ensure_server():
@@ -166,7 +197,8 @@ def chat(messages, tools, show_timings=False):
             for tc in msg["tool_calls"]:
                 name = tc["function"]["name"]
                 args = json.loads(tc["function"]["arguments"])
-                print(f"{YELLOW}  [tool] {name} {args}{RESET}", file=sys.stderr)
+                display = {k: v for k, v in args.items() if k != "content"}
+                print(f"{YELLOW}  [tool] {name} {display}{RESET}", file=sys.stderr)
                 if name == "exec_shell_command":
                     print(f"{BOLD}  run? [Y/n] {RESET}", end="", flush=True, file=sys.stderr)
                     if input().strip().lower() == "n":
@@ -186,13 +218,17 @@ def chat(messages, tools, show_timings=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="CodePy — local AI coding agent")
+    parser = argparse.ArgumentParser(description="homecode v{VERSION} — local AI coding agent")
     parser.add_argument("--install", action="store_true", help="install or update llama.cpp to ~/.llama")
+    parser.add_argument("--update", action="store_true", help="update homecode.py from GitHub")
     parser.add_argument("--timings", action="store_true", help="show token rate after each response")
-    parser.add_argument("--keep-server", action="store_true", help="do not stop llama-server on exit")
+    parser.add_argument("--keep", action="store_true", help="do not stop llama-server on exit")
     args = parser.parse_args()
     if args.install:
         install_llama()
+        return
+    if args.update:
+        update_script()
         return
     readline.parse_and_bind("tab: complete")
     readline.parse_and_bind("set editing-mode emacs")
@@ -205,9 +241,15 @@ def main():
     if TAVILY_API_KEY:
         tools.append(TAVILY_SEARCH_TOOL)
     tool_names = ", ".join(t["function"]["name"] for t in tools)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system_prompt = SYSTEM_PROMPT + "\n"
+    agent_md = os.path.join(os.getcwd(), AGENT_FILE)
+    if os.path.isfile(agent_md):
+        with open(agent_md) as f:
+            system_prompt += f.read().strip()
+        print(f"File {AGENT_FILE} added to prompt")
+    messages = [{"role": "system", "content": system_prompt}]
     model_name = requests.get(f"{BASE_URL}/v1/models").json()["data"][0]["id"]
-    print(f"{BOLD_BLUE}CodePy v0.1 — using {model_name}{RESET}")
+    print(f"{BOLD_BLUE}homecode v{VERSION} — using {model_name}{RESET}")
     print(f"Available tools: {tool_names}")
     print("ctrl+d to exit\n")
     try:
@@ -224,7 +266,7 @@ def main():
             chat(messages, tools, show_timings=args.timings)
     finally:
         readline.write_history_file(HISTORY_FILE)
-        if server_proc is not None and not args.keep_server:
+        if server_proc is not None and not args.keep:
             print(f"{BOLD_YELLOW}Stopping llama-server ...{RESET}", file=sys.stderr)
             server_proc.terminate()
             server_proc.wait()
