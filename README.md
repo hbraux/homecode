@@ -30,6 +30,8 @@ homecode --update    # update the tool to the latest version
 
 Press `ctrl+d` to exit. Input history is saved to `~/.homecode_history`.
 
+Note: first run may take some time to download the model file.
+
 ## Configuration
 
 | Environment variable    | Default                                       | Description                          |
@@ -41,14 +43,21 @@ Press `ctrl+d` to exit. Input history is saved to `~/.homecode_history`.
 ## Project context (AGENT.md)
 
 If an `AGENT.md` file exists in the current directory when `homecode` starts, it is automatically loaded and 
-appended to the system prompt. Use it to provide project-specific context to the model (language, build tool, framework, conventions, etc.).\
+appended to the system prompt. 
+
+Use it to provide project-specific context to the model (language, build tool, framework, coding style, etc).
+With a small model like 4B, you must be very specific
 Example:
 
 ```
-Project context:
-* Language: Kotlin (Idiomatic)
-* Build Tool: Maven (pom.xml)
-* Game framework: LibGDX 1.12.1 (backend LWJGL3)
+Language: Kotlin idiomatic
+Code style: no comments, no KDoc/Javadoc, no docstrings
+Build Tool: maven
+Base package: fr.braux.beta
+Source directory: src/main/kotlin/com/example/project
+Test directory: src/test/kotlin/com/example/project
+When writing code files, place them under source or test directory
+
 ```
 
 A confirmation message is printed at startup when `AGENT.md` is found.

@@ -21,9 +21,9 @@ from rich.markdown import Markdown
 
 console = Console()
 
-VERSION = "0.2"
+VERSION = "0.3"
 BASE_URL = "http://localhost:8080"
-MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "bartowski/google_gemma-4-E4B-it-GGUF:Q5_K_M")
+MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "unsloth/gemma-4-E4B-it-GGUF:UD-Q5_K_XL")
 MODEL_PARAMS = os.environ.get("HOMECODE_MODEL_PARAMS", "--no-mmproj --ctx-size 16384 --flash-attn on --temp 0.1 --n-gpu-layers all")
 LLAMA_DIR = os.path.expanduser("~/.llama")
 LLAMA_BIN = os.path.join(LLAMA_DIR, "llama-server")
@@ -33,6 +33,7 @@ if platform.system() == "Darwin":
 else:
     LLAMA_ASSET_PATTERN = r"ubuntu.*vulkan.*x64"
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+CONFIRM_TOOLS = {"exec_shell_command"}
 HISTORY_FILE = os.path.expanduser("~/.homecode_history")
 
 CYAN        = "\033[36m"
@@ -46,7 +47,8 @@ SYSTEM_PROMPT = (
     "You are an expert coding assistant. "
     "You help with any programming language, framework, or tool. "
     "You can read, write, and edit files, search code, and run shell commands to assist with software engineering tasks. "
-    "When asked to create a file or write code, always write it to disk using the file writing tool — never dump code in your response. "
+    "When asked to create a file or write code, always write it to disk using the file writing tool — never include code in your text response. "
+    "After using any tool, respond with 'Done.' only. "
     "Be concise."
 )
 
@@ -129,9 +131,9 @@ def ensure_server():
     version = open(version_file).read().strip() if os.path.isfile(version_file) else "unknown"
     print(f"{BOLD_YELLOW}Starting llama-server {version} ...{RESET}", file=sys.stderr)
     os.makedirs(LLAMA_DIR, exist_ok=True)
-    with open(LLAMA_LOG, "a") as log:
+    with open(LLAMA_LOG, "w") as log:
         proc = subprocess.Popen(
-            [LLAMA_BIN, "-v", "-hf", MODEL_ID] + shlex.split(MODEL_PARAMS) + ["--tools", "all"],
+            [LLAMA_BIN, "-hf", MODEL_ID] + shlex.split(MODEL_PARAMS) + ["--tools", "all"],
             stdout=log, stderr=log,
         )
     print(f"PID {proc.pid} — logs: {LLAMA_LOG}", file=sys.stderr)
@@ -197,9 +199,9 @@ def chat(messages, tools, show_timings=False):
             for tc in msg["tool_calls"]:
                 name = tc["function"]["name"]
                 args = json.loads(tc["function"]["arguments"])
-                display = {k: v for k, v in args.items() if k != "content"}
-                print(f"{YELLOW}  [tool] {name} {display}{RESET}", file=sys.stderr)
-                if name == "exec_shell_command":
+                detail = args.get("path") or args.get("command") or ""
+                print(f"{YELLOW}  {name} {detail}{RESET}", file=sys.stderr)
+                if name in CONFIRM_TOOLS:
                     print(f"{BOLD}  run? [Y/n] {RESET}", end="", flush=True, file=sys.stderr)
                     if input().strip().lower() == "n":
                         print(f"{BOLD_YELLOW}  Aborted{RESET}", file=sys.stderr)
