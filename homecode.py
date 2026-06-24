@@ -23,8 +23,8 @@ console = Console()
 
 VERSION = "0.3"
 BASE_URL = "http://localhost:8080"
-MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "unsloth/gemma-4-E4B-it-GGUF:UD-Q5_K_XL")
-MODEL_PARAMS = os.environ.get("HOMECODE_MODEL_PARAMS", "--no-mmproj --ctx-size 16384 --flash-attn on --temp 0.1 --n-gpu-layers all")
+MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:Q4_K_M")
+MODEL_PARAMS = os.environ.get("HOMECODE_MODEL_PARAMS", "--ctx-size 16384 --n-gpu-layers 99 --no-mmap  -fa on  --temp 0.1")
 LLAMA_DIR = os.path.expanduser("~/.llama")
 LLAMA_BIN = os.path.join(LLAMA_DIR, "llama-server")
 LLAMA_LOG = os.path.join(LLAMA_DIR, "llama.log")

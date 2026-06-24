@@ -1,6 +1,6 @@
 # homecode
 
-A simple local AI coding agent in Python. Sends prompts to a local `llama-server` (OpenAI-compatible API) and 
+A simple local AI coding agent in Python. Sends prompts to a local [llama-cpp](https://github.com/ggml-org/llama.cpp]) server and 
 executes tool calls client-side in an agentic loop.
 
 ## Requirements
@@ -21,10 +21,10 @@ Make sure `~/.local/bin` is in your `PATH`
 ## Usage
 
 ```bash
-homecode             # start the REPL (auto-starts llama-server)
+homecode             # start the REPL (auto-starts llama-cpp server)
 homecode --install   # download latest llama.cpp version to ~/.llama
 homecode --timings   # show token/s after each response
-homecode --keep      # leave llama-server running on exit
+homecode --keep      # leave llama-cpp server running on exit
 homecode --update    # update the tool to the latest version
 ```
 
@@ -53,11 +53,9 @@ Example:
 Language: Kotlin idiomatic
 Code style: no comments, no KDoc/Javadoc, no docstrings
 Build Tool: maven
-Base package: fr.braux.beta
+Base package: com.example.project
 Source directory: src/main/kotlin/com/example/project
 Test directory: src/test/kotlin/com/example/project
-When writing code files, place them under source or test directory
-
 ```
 
 A confirmation message is printed at startup when `AGENT.md` is found.
