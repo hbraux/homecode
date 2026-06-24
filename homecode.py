@@ -23,7 +23,7 @@ console = Console()
 
 VERSION = "0.3"
 BASE_URL = "http://localhost:8080"
-MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:Q4_K_M")
+MODEL_ID = os.environ.get("HOMECODE_MODEL_ID", "yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF:Q4_K_M")
 MODEL_PARAMS = os.environ.get("HOMECODE_MODEL_PARAMS", "--ctx-size 16384 --n-gpu-layers 99 --no-mmap  -fa on  --temp 0.1")
 LLAMA_DIR = os.path.expanduser("~/.llama")
 LLAMA_BIN = os.path.join(LLAMA_DIR, "llama-server")
@@ -48,6 +48,7 @@ SYSTEM_PROMPT = (
     "You help with any programming language, framework, or tool. "
     "You can read, write, and edit files, search code, and run shell commands to assist with software engineering tasks. "
     "When asked to create a file or write code, always write it to disk using the file writing tool — never include code in your text response. "
+    "After using any tool, respond with 'Done.' only. "
     "Be concise."
 )
 

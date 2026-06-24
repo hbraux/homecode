@@ -34,11 +34,11 @@ Note: first run may take some time to download the model file.
 
 ## Configuration
 
-| Environment variable    | Default                                                                                                              | Description                          |
-|-------------------------|----------------------------------------------------------------------------------------------------------------------|--------------------------------------|
-| `HOMECODE_MODEL_ID`     | [gemma-4-12B-coder-fable5-composer2.5](https://huggingface.co/yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF) | HuggingFace model repo               |
-| `HOMECODE_MODEL_PARAMS` | see source                                                                                                           | Extra flags passed to `llama-server` |
-| `TAVILY_API_KEY`        | *(unset)*                                                                                                            | Enable web search via Tavily         |
+| Environment variable    | Default                                                                             | Description                          |
+|-------------------------|-------------------------------------------------------------------------------------|--------------------------------------|
+| `HOMECODE_MODEL_ID`     | [gemma-4-12B-v2](yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF) | HuggingFace model repo               |
+| `HOMECODE_MODEL_PARAMS` | see source                                                                          | Extra flags passed to `llama-server` |
+| `TAVILY_API_KEY`        | *(unset)*                                                                           | Enable web search via Tavily         |
 
 ## Project context (AGENT.md)
 
