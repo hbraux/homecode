@@ -3,6 +3,7 @@
 # Copyright 2026 Harold Braux. MIT License
 
 import argparse
+import glob
 import json
 import os
 import platform
@@ -33,7 +34,6 @@ if platform.system() == "Darwin":
 else:
     LLAMA_ASSET_PATTERN = r"ubuntu.*vulkan.*x64"
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-CONFIRM_TOOLS = {"exec_shell_command"}
 HISTORY_FILE = os.path.expanduser("~/.homecode_history")
 
 CYAN        = "\033[36m"
@@ -47,11 +47,178 @@ SYSTEM_PROMPT = (
     "You are an expert coding assistant. "
     "You help with any programming language, framework, or tool. "
     "You can read, write, and edit files, search code, and run shell commands to assist with software engineering tasks. "
-    "When asked to create a file or write code, always write it to disk using the file writing tool — never include code in your text response. "
-    "After using any tool, respond with 'Done.' only. "
+    "Only use tools when strictly necessary to answer the question. "
+    "For simple questions that can be answered directly, respond with text only — do not call any tools. "
+    "Only write or edit files when the user explicitly asks you to create or modify a file. "
     "Be concise."
 )
 
+# ── client-defined tools ──────────────────────────────────────────────────────
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read the contents of a file. Only use when you need to inspect a specific file to answer the user's question.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file, relative to the working directory"}
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write content to a file. Only use when the user explicitly asks to create or modify a file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file, relative to the working directory"},
+                    "content": {"type": "string", "description": "Content to write"},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_files",
+            "description": "List files matching a glob pattern within the working directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Glob pattern, e.g. '**/*.py' or '*.md'"}
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_code",
+            "description": "Search for a text pattern across files in the working directory using grep.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex pattern to search for"},
+                    "file_glob": {"type": "string", "description": "Glob to restrict which files to search, e.g. '*.py'", "default": "*"},
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "exec_shell_command",
+            "description": "Run a shell command in the working directory. Use only when no other tool can answer the question.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command to execute"}
+                },
+                "required": ["command"],
+            },
+        },
+    },
+]
+
+TAVILY_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": "Search the web and return the top results.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query"}
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+# Tools that require user confirmation before running
+CONFIRM_TOOLS = {"exec_shell_command", "write_file"}
+
+
+def _safe_path(path):
+    """Resolve path relative to cwd, refuse traversal outside it."""
+    cwd = os.getcwd()
+    full = os.path.realpath(os.path.join(cwd, path))
+    if not full.startswith(cwd):
+        raise ValueError(f"Path outside working directory: {path}")
+    return full
+
+
+def tool_read_file(path):
+    full = _safe_path(path)
+    with open(full) as f:
+        return f.read()
+
+
+def tool_write_file(path, content):
+    full = _safe_path(path)
+    os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
+    with open(full, "w") as f:
+        f.write(content)
+    return f"Written {path}"
+
+
+def tool_list_files(pattern):
+    cwd = os.getcwd()
+    matches = glob.glob(pattern, root_dir=cwd, recursive=True)
+    return "\n".join(sorted(matches)) or "(no matches)"
+
+
+def tool_search_code(pattern, file_glob="*"):
+    result = subprocess.run(
+        ["grep", "-rn", "--include", file_glob, pattern, "."],
+        capture_output=True, text=True,
+    )
+    return result.stdout or "(no matches)"
+
+
+def tool_exec_shell_command(command):
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    out = result.stdout + result.stderr
+    return out.strip() or "(no output)"
+
+
+def web_search(query):
+    resp = requests.post(
+        "https://api.tavily.com/search",
+        json={"api_key": TAVILY_API_KEY, "query": query, "max_results": 5},
+    )
+    resp.raise_for_status()
+    results = resp.json().get("results", [])
+    return "\n\n".join(f"{r['title']}\n{r['url']}\n{r.get('content', '')}" for r in results)
+
+
+def execute_tool(name, args):
+    if name == "read_file":
+        return tool_read_file(args["path"])
+    if name == "write_file":
+        return tool_write_file(args["path"], args["content"])
+    if name == "list_files":
+        return tool_list_files(args["pattern"])
+    if name == "search_code":
+        return tool_search_code(args["pattern"], args.get("file_glob", "*"))
+    if name == "exec_shell_command":
+        return tool_exec_shell_command(args["command"])
+    if name == "web_search":
+        return web_search(args["query"])
+    return f"Unknown tool: {name}"
+
+
+# ── llama-server management ───────────────────────────────────────────────────
 
 def install_llama():
     print("Fetching latest llama.cpp release ...")
@@ -87,7 +254,6 @@ def install_llama():
                 src = os.path.join(root, name)
                 if ".so" in name or os.access(src, os.X_OK):
                     shutil.copy2(src, os.path.join(LLAMA_DIR, name))
-
     with open(version_file, "w") as f:
         f.write(latest)
     print(f"Installed {latest}")
@@ -133,7 +299,7 @@ def ensure_server():
     os.makedirs(LLAMA_DIR, exist_ok=True)
     with open(LLAMA_LOG, "w") as log:
         proc = subprocess.Popen(
-            [LLAMA_BIN, "-hf", MODEL_ID] + shlex.split(MODEL_PARAMS) + ["--tools", "all"],
+            [LLAMA_BIN, "-hf", MODEL_ID] + shlex.split(MODEL_PARAMS),
             stdout=log, stderr=log,
         )
     print(f"PID {proc.pid} — logs: {LLAMA_LOG}", file=sys.stderr)
@@ -145,44 +311,7 @@ def ensure_server():
     sys.exit(1)
 
 
-TAVILY_SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "Search the web and return the top results.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "The search query"}
-            },
-            "required": ["query"],
-        },
-    },
-}
-
-
-def web_search(query):
-    resp = requests.post(
-        "https://api.tavily.com/search",
-        json={"api_key": TAVILY_API_KEY, "query": query, "max_results": 5},
-    )
-    resp.raise_for_status()
-    results = resp.json().get("results", [])
-    return "\n\n".join(f"{r['title']}\n{r['url']}\n{r.get('content', '')}" for r in results)
-
-
-def fetch_tools():
-    return [t["definition"] for t in requests.get(f"{BASE_URL}/tools").json()]
-
-
-def execute_tool(name, args):
-    if name == "web_search":
-        return web_search(args["query"])
-    resp = requests.post(f"{BASE_URL}/tools", json={"tool": name, "params": args})
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("plain_text_response") or str(data)
-
+# ── chat loop ─────────────────────────────────────────────────────────────────
 
 def chat(messages, tools, show_timings=False):
     while True:
@@ -199,14 +328,18 @@ def chat(messages, tools, show_timings=False):
             for tc in msg["tool_calls"]:
                 name = tc["function"]["name"]
                 args = json.loads(tc["function"]["arguments"])
-                detail = args.get("path") or args.get("command") or ""
+                detail = args.get("path") or args.get("command") or args.get("pattern") or args.get("query") or ""
                 print(f"{YELLOW}  {name} {detail}{RESET}", file=sys.stderr)
                 if name in CONFIRM_TOOLS:
                     print(f"{BOLD}  run? [Y/n] {RESET}", end="", flush=True, file=sys.stderr)
                     if input().strip().lower() == "n":
                         print(f"{BOLD_YELLOW}  Aborted{RESET}", file=sys.stderr)
-                        return
-                result = execute_tool(name, args)
+                        messages.append({"role": "tool", "tool_call_id": tc["id"], "content": "User aborted this tool call."})
+                        continue
+                try:
+                    result = execute_tool(name, args)
+                except Exception as e:
+                    result = f"Error: {e}"
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
         else:
             content = msg.get("content") or ""
@@ -239,7 +372,7 @@ def main():
     except (FileNotFoundError, PermissionError):
         pass
     server_proc = ensure_server()
-    tools = fetch_tools()
+    tools = list(TOOLS)
     if TAVILY_API_KEY:
         tools.append(TAVILY_SEARCH_TOOL)
     tool_names = ", ".join(t["function"]["name"] for t in tools)
