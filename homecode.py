@@ -41,6 +41,7 @@ YELLOW      = "\033[33m"
 BOLD        = "\033[1m"
 BOLD_YELLOW = "\033[1;33m"
 BOLD_BLUE   = "\033[1;34m"
+DIM_PURPLE  = "\033[22;38;5;177m"
 RESET       = "\033[0m"
 AGENT_FILE = "AGENT.md"
 SYSTEM_PROMPT = (
@@ -109,6 +110,7 @@ TOOLS = [
                 "properties": {
                     "pattern": {"type": "string", "description": "Regex pattern to search for"},
                     "file_glob": {"type": "string", "description": "Glob to restrict which files to search, e.g. '*.py'", "default": "*"},
+                    "max_lines": {"type": "integer", "description": "Maximum number of result lines to return (default 50)"},
                 },
                 "required": ["pattern"],
             },
@@ -178,12 +180,21 @@ def tool_list_files(pattern):
     return "\n".join(sorted(matches)) or "(no matches)"
 
 
-def tool_search_code(pattern, file_glob="*"):
+def tool_search_code(pattern, file_glob="*", max_lines=50):
     result = subprocess.run(
         ["grep", "-rn", "--include", file_glob, pattern, "."],
         capture_output=True, text=True,
     )
-    return result.stdout or "(no matches)"
+    output = result.stdout
+    if not output:
+        return "(no matches)"
+    lines = output.splitlines()
+    truncated = len(lines) > max_lines
+    lines = lines[:max_lines]
+    out = "\n".join(lines)
+    if truncated:
+        out += f"\n... (truncated to {max_lines} lines)"
+    return out
 
 
 def tool_exec_shell_command(command):
@@ -210,7 +221,7 @@ def execute_tool(name, args):
     if name == "list_files":
         return tool_list_files(args["pattern"])
     if name == "search_code":
-        return tool_search_code(args["pattern"], args.get("file_glob", "*"))
+        return tool_search_code(args["pattern"], args.get("file_glob", "*"), args.get("max_lines", 50))
     if name == "exec_shell_command":
         return tool_exec_shell_command(args["command"])
     if name == "web_search":
@@ -325,6 +336,7 @@ def chat(messages, tools, show_timings=False):
         msg = choice["message"]
         messages.append(msg)
         if choice["finish_reason"] == "tool_calls":
+            aborted = False
             for tc in msg["tool_calls"]:
                 name = tc["function"]["name"]
                 args = json.loads(tc["function"]["arguments"])
@@ -335,13 +347,19 @@ def chat(messages, tools, show_timings=False):
                     if input().strip().lower() == "n":
                         print(f"{BOLD_YELLOW}  Aborted{RESET}", file=sys.stderr)
                         messages.append({"role": "tool", "tool_call_id": tc["id"], "content": "User aborted this tool call."})
-                        continue
+                        aborted = True
+                        break
                 try:
                     result = execute_tool(name, args)
                 except Exception as e:
                     result = f"Error: {e}"
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+            if aborted:
+                return
         else:
+            reasoning = msg.get("reasoning_content") or ""
+            if reasoning:
+                print(f"{DIM_PURPLE}{reasoning}{RESET}\n")
             content = msg.get("content") or ""
             console.print(Markdown(content))
             if show_timings:
